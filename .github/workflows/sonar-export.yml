@@ -1,0 +1,40 @@
+name: Export SonarCloud Security Findings
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["SonarQube"]
+    types: [completed]
+
+jobs:
+  export-findings:
+    name: Export Security Findings
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Wait for SonarCloud to process results
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        run: sleep 20
+
+      - name: Checkout scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Download vulnerability issues
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: node .github/scripts/download-issues.js reports
+
+      - name: Convert to CSV
+        run: node .github/scripts/convert-to-csv.js reports/vulnerabilities.json
+
+      - name: Upload security findings report
+        uses: actions/upload-artifact@v4
+        with:
+          name: juice-shop-ddd9cf7-sonarcloud-security-findings
+          path: |
+            reports/vulnerabilities.json
+            reports/issues.csv
+            reports/flows.csv
+          retention-days: 30
